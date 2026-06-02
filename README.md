@@ -106,3 +106,46 @@ If trade placements throw a `Timestamp for this request is outside of the recvWi
 2. Find the **Additional settings** heading section.
 3. Click **Sync now** to recalibrate with internet time servers.
 4. Restart your terminal application (`python main.py`).
+
+
+# 📱 App Screenshots
+
+<table>
+<tr>
+<td align="center" width="33%">
+
+<details>
+<summary><b>📜 Logs </b></summary>
+<br>
+
+<img src="https://github.com/user-attachments/assets/d6dfffd6-8cd9-41a9-9ac1-6de0a95ca056" width="250"/>
+
+</details>
+
+</td>
+
+<td align="center" width="33%">
+
+<details>
+<summary><b>📊 Trading Panel</b></summary>
+<br>
+
+<img src="https://github.com/user-attachments/assets/360b857c-539e-417c-b37b-e17e29ffc9ab" width="250"/>
+
+</details>
+
+</td>
+
+<td align="center" width="33%">
+
+<details>
+<summary><b>⚙️ Bot Settings</b></summary>
+<br>
+
+<img src="https://github.com/user-attachments/assets/ef41ea8b-20c3-4362-aea6-47e282e6b117" width="250"/>
+
+</details>
+
+</td>
+</tr>
+</table>
