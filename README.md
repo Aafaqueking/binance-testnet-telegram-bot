@@ -25,7 +25,6 @@ A production-ready Telegram bot engineered with the `python-telegram-bot` framew
 telegram-trading-bot/
 │
 ├── main.py                 # Central core lifecycle loader & networking router
-├── config.py               # Credentials importer
 ├── .env                    # System-level sensitive environment storage keys
 ├── bot.log                 # Standard text stream diagnostic log target file
 │
