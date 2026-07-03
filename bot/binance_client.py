@@ -54,3 +54,51 @@ class BinanceFuturesClient:
             except Exception as e:
                 logger.error(f"Network Failure: {e}")
                 raise Exception(f"Network Error: {e}")
+
+    async def get_balance(self):
+        """
+        Fetch futures account balances (signed).
+        Returns: list of balance dicts as returned by /fapi/v2/balance
+        """
+        endpoint = "/fapi/v2/balance"
+        url = self.base_url + endpoint
+        params = {"timestamp": int(time.time() * 1000)}
+        query_string = urlencode(params)
+        params["signature"] = self._generate_signature(query_string)
+        headers = {"X-MBX-APIKEY": self.api_key}
+
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(url, headers=headers, params=params, timeout=10.0)
+                resp.raise_for_status()
+                data = resp.json()
+                logger.info("Fetched account balances from Binance Futures testnet.")
+                return data
+            except httpx.HTTPStatusError as e:
+                try:
+                    error_msg = resp.json().get('msg', str(e)) if resp.content else str(e)
+                except Exception:
+                    error_msg = str(e)
+                logger.error(f"Balance API rejection: {error_msg}")
+                raise Exception(f"Binance Error: {error_msg}")
+            except Exception as e:
+                logger.error(f"Network failure when fetching balances: {e}")
+                raise Exception(f"Network Error: {e}")
+
+    async def get_all_prices(self):
+        """
+        Fetch current futures ticker prices (public).
+        Returns: dict mapping symbol -> float(price)
+        """
+        endpoint = "/fapi/v1/ticker/price"
+        url = self.base_url + endpoint
+
+        async with httpx.AsyncClient() as client:
+            try:
+                resp = await client.get(url, timeout=10.0)
+                resp.raise_for_status()
+                data = resp.json()
+                return {item["symbol"]: float(item["price"]) for item in data}
+            except Exception as e:
+                logger.error(f"Failed to fetch prices: {e}")
+                return {}
