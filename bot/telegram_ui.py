@@ -14,11 +14,13 @@ from .logger import logger
 
 SYMBOL, SIDE, ORDER_TYPE, PRICE, QUANTITY, CONFIRM = range(6)
 
+MENU_BUTTONS = {"💰 Balance", "📋 Logs", "⚙️ Settings", "📈 Trade"}
+
 def check_owner(user_id: int) -> bool:
     owner_ids = os.getenv("TELEGRAM_OWNER_ID", "").split(",")
     return str(user_id).strip() in [oid.strip() for oid in owner_ids]
 
-# ---- MAIN MENU (NEW) ----
+# ---- MAIN MENU ----
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     """Sends the welcome message and locks the custom menu to the user's keyboard."""
     menu_keyboard = [
@@ -38,7 +40,7 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     )
     await update.message.reply_text(welcome_text, parse_mode='Markdown', reply_markup=reply_markup)
 
-# ---- UTILITY: BALANCE CHECK (NEW) ----
+# ---- BALANCE CHECK ----
 async def check_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_public = context.bot_data.get('is_public', False)
     
@@ -46,11 +48,53 @@ async def check_balance(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await update.message.reply_text("⛔ Unauthorized. The bot is in Personal Mode.")
         return
 
-    # Add your actual Binance Client balance fetching logic here
-    await update.message.reply_text(
-        "💼 *Balance Check*\n\n_(Note: Connect your binance_client.get_balance() here)_", 
-        parse_mode='Markdown'
-    )
+    client = context.bot_data.get('binance_client')
+    if not client:
+        await update.message.reply_text("⚠️ Binance client is not configured on the bot.")
+        return
+
+    try:
+        balances = await client.get_balance()
+        prices = await client.get_all_prices()
+    except Exception as e:
+        logger.exception("Failed to fetch balances or prices")
+        await update.message.reply_text(f"🔴 Error fetching balances: `{str(e)}`", parse_mode='Markdown')
+        return
+
+    # Format balances: show only non-zero entries
+    lines = []
+    total_usdt = 0.0
+    for b in balances:
+        asset = b.get("asset")
+        try:
+            bal = float(b.get("balance", 0) or 0)
+        except Exception:
+            bal = 0.0
+        if bal <= 0:
+            continue
+
+        pair = f"{asset}USDT"
+        value = None
+        if pair in prices:
+            try:
+                value = prices[pair] * bal
+                total_usdt += value
+            except Exception:
+                value = None
+
+        if value is not None:
+            lines.append(f"{asset}: `{bal:g}`  (~{value:.2f} USDT)")
+        else:
+            lines.append(f"{asset}: `{bal:g}`")
+
+    if not lines:
+        msg = "💼 *Balance Check*\n\n_No non-zero balances found._"
+    else:
+        msg = "💼 *Balance Check*\n\n" + "\n".join(lines)
+        if total_usdt > 0:
+            msg += f"\n\n*Estimated total:* {total_usdt:.2f} USDT"
+
+    await update.message.reply_text(msg, parse_mode='Markdown')
 
 # ---- PERMISSION CONTROL ENGINE ----
 async def set_permission(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -90,7 +134,6 @@ async def handle_permission_callback(update: Update, context: ContextTypes.DEFAU
 async def start_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     is_public = context.bot_data.get('is_public', False)
     
-    # Allow access if bot is public OR user is the verified owner
     if not is_public and not check_owner(update.message.from_user.id):
         logger.warning(f"Unauthorized trade attempt blocked for ID: {update.message.from_user.id}")
         await update.message.reply_text("⛔ Unauthorized. The bot is currently locked down in **Personal Mode**.")
@@ -104,8 +147,23 @@ async def start_trade(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return SYMBOL
 
 async def handle_symbol(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    
+    # Check if a menu button was pressed instead of a symbol
+    if text in MENU_BUTTONS:
+        if text == "💰 Balance":
+            await check_balance(update, context)
+        elif text == "📋 Logs":
+            await print_logs(update, context)
+        elif text == "⚙️ Settings":
+            await set_permission(update, context)
+        elif text == "📈 Trade":
+            await start_trade(update, context)
+            return SYMBOL
+        return ConversationHandler.END
+    
     try:
-        symbol = validate_symbol(update.message.text)
+        symbol = validate_symbol(text)
         context.user_data['symbol'] = symbol
         
         keyboard = [
@@ -143,8 +201,23 @@ async def handle_type(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return QUANTITY
 
 async def handle_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    
+    # Check if a menu button was pressed
+    if text in MENU_BUTTONS:
+        if text == "💰 Balance":
+            await check_balance(update, context)
+        elif text == "📋 Logs":
+            await print_logs(update, context)
+        elif text == "⚙️ Settings":
+            await set_permission(update, context)
+        elif text == "📈 Trade":
+            await start_trade(update, context)
+            return SYMBOL
+        return ConversationHandler.END
+    
     try:
-        context.user_data['price'] = validate_positive_float(update.message.text, "Price")
+        context.user_data['price'] = validate_positive_float(text, "Price")
         await update.message.reply_text("Enter Quantity:")
         return QUANTITY
     except ValueError as e:
@@ -152,8 +225,23 @@ async def handle_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return PRICE
 
 async def handle_quantity(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    text = update.message.text
+    
+    # Check if a menu button was pressed
+    if text in MENU_BUTTONS:
+        if text == "💰 Balance":
+            await check_balance(update, context)
+        elif text == "📋 Logs":
+            await print_logs(update, context)
+        elif text == "⚙️ Settings":
+            await set_permission(update, context)
+        elif text == "📈 Trade":
+            await start_trade(update, context)
+            return SYMBOL
+        return ConversationHandler.END
+    
     try:
-        context.user_data['quantity'] = validate_positive_float(update.message.text, "Quantity")
+        context.user_data['quantity'] = validate_positive_float(text, "Quantity")
         
         d = context.user_data
         summary = f"📋 **Order Summary**\n▪️ {d['symbol']} | {d['side']} | {d['type']}\n▪️ Qty: {d['quantity']}\n"
@@ -189,7 +277,7 @@ async def handle_confirm(update: Update, context: ContextTypes.DEFAULT_TYPE):
     return ConversationHandler.END
 
 async def cancel(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    await update.message.reply_text("Session ended.")
+    await update.message.reply_text("Session ended. Use the menu to start again.")
     return ConversationHandler.END
 
 # ---- DYNAMIC LOG PRINTING FEATURE ----
@@ -213,7 +301,6 @@ async def print_logs(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
 # ---- ROUTER EXPORTS ----
 def get_trade_handler():
-    # Note the addition of the Regex filter so the "📈 Trade" button works just like /trade
     return ConversationHandler(
         entry_points=[
             CommandHandler('trade', start_trade),
@@ -231,7 +318,6 @@ def get_trade_handler():
     )
 
 def get_permission_handlers():
-    # Adding the Regex filter here so the "⚙️ Settings" button works like /permission
     return [
         CommandHandler('permission', set_permission),
         MessageHandler(filters.Regex('^⚙️ Settings$'), set_permission),
